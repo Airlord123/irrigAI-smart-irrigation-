@@ -1,0 +1,84 @@
+#ifndef EDGE_AI_H
+#define EDGE_AI_H
+
+#include <Arduino.h>
+#include <Preferences.h>
+#include "config.h"
+
+// Define network geometry
+#define INPUT_NODES   3
+#define HIDDEN_NODES  4
+#define OUTPUT_NODES  1
+#define MAX_SAMPLES   50
+
+struct TrainingSample {
+    float inputs[INPUT_NODES];
+    float label;
+};
+
+class EdgeAI {
+public:
+    EdgeAI();
+
+    // Initialize network, load weights & settings from NVS
+    void begin();
+
+    // Runs feedforward inference
+    // Inputs: moisture (0-100%), temp (°C), humidity (0-100%)
+    // Output: probability that irrigation is required [0.0 - 1.0]
+    float predict(float moisturePercent, float tempC, float humidityPercent);
+
+    // Add a training sample dynamically to the circular buffer
+    void addSample(float moisturePercent, float tempC, float humidityPercent, float label);
+
+    // Executes backpropagation training over the collected circular buffer
+    // Returns final average loss
+    float train(int epochs = 1000, float learningRate = 0.15f);
+
+    // Reset weights to random values and clear buffer
+    void resetModel();
+
+    // Inject simulated Bangalore summer dataset (hot weather, 3 days post-rain)
+    void injectBangaloreData();
+
+    // NVS storage for the Auto Mode state
+    bool isAutoMode() const { return autoMode; }
+    void setAutoMode(bool enable);
+
+    // Getters for status monitoring
+    int getDatasetSize() const { return datasetSize; }
+    float getLastTrainingLoss() const { return lastLoss; }
+    
+    // Serializes weights into a string buffer for BLE transmission
+    String getWeightsString() const;
+
+private:
+    Preferences preferences;
+
+    // Weights and Biases
+    // Layer 1: Input to Hidden
+    float weightsIH[INPUT_NODES][HIDDEN_NODES];
+    float biasH[HIDDEN_NODES];
+
+    // Layer 2: Hidden to Output
+    float weightsHO[HIDDEN_NODES][OUTPUT_NODES];
+    float biasO[OUTPUT_NODES];
+
+    // Dataset memory
+    TrainingSample dataset[MAX_SAMPLES];
+    int datasetSize;
+    int datasetIndex;
+
+    // Model configurations
+    bool autoMode;
+    float lastLoss;
+
+    // Helper math functions
+    float sigmoid(float x) const;
+    float sigmoidDerivative(float x) const;
+    void initWeightsRandomly();
+    void saveWeightsToNVS();
+    void loadWeightsFromNVS();
+};
+
+#endif // EDGE_AI_H

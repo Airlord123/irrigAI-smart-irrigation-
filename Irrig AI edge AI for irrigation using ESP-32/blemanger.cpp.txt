@@ -1,0 +1,204 @@
+#include "blemanger.h"
+
+class ServerCallbacks : public BLEServerCallbacks {
+public:
+    ServerCallbacks(BLEManager* mgr) : manager(mgr) {}
+    
+    void onConnect(BLEServer* pServer) override {
+        manager->clientConnected = true;
+        Serial.println("[BLEManager] Client connected.");
+    }
+
+    void onDisconnect(BLEServer* pServer) override {
+        manager->clientConnected = false;
+        Serial.println("[BLEManager] Client disconnected. Restarting advertising...");
+        pServer->startAdvertising(); 
+    }
+private:
+    BLEManager* manager;
+};
+
+class ConfigCallbacks : public BLECharacteristicCallbacks {
+public:
+    ConfigCallbacks(BLEManager* mgr) : manager(mgr) {}
+
+    void onWrite(BLECharacteristic* pChar) override {
+        String data = pChar->getValue();
+        data.trim();
+
+        int firstColon = data.indexOf(':');
+        int secondColon = data.indexOf(':', firstColon + 1);
+
+        if (firstColon != -1 && secondColon != -1) {
+            String ssid = data.substring(0, firstColon);
+            String pass = data.substring(firstColon + 1, secondColon);
+            String apiKey = data.substring(secondColon + 1);
+
+            Preferences prefs;
+            prefs.begin(NVS_NAMESPACE, false);
+            prefs.putString(KEY_WIFI_SSID, ssid);
+            prefs.putString(KEY_WIFI_PASS, pass);
+            prefs.putString(KEY_TS_WRITE_KEY, apiKey);
+            prefs.end();
+
+            Serial.println("[BLEManager] NVS Config updated via BLE.");
+            Serial.print("[BLEManager] SSID: "); Serial.println(ssid);
+            Serial.print("[BLEManager] ThingSpeak API Key: "); Serial.println(apiKey);
+
+            manager->reloadCredentialsFlag = true;
+        } else {
+            Serial.println("[BLEManager] Error: SSID:PASS:API_KEY format mismatch.");
+        }
+    }
+private:
+    BLEManager* manager;
+};
+
+class CalibrationCallbacks : public BLECharacteristicCallbacks {
+public:
+    CalibrationCallbacks(BLEManager* mgr) : manager(mgr) {}
+
+    void onWrite(BLECharacteristic* pChar) override {
+        String cmd = pChar->getValue();
+        cmd.trim();
+
+        int currentRaw = manager->sensorMgr->getRawMoisture();
+
+        if (cmd == "CAL_DRY") {
+            manager->sensorMgr->calibrateDry(currentRaw);
+            Serial.print("[BLEManager] Dry calibration triggered: ");
+            Serial.println(currentRaw);
+        } else if (cmd == "CAL_WET") {
+            manager->sensorMgr->calibrateWet(currentRaw);
+            Serial.print("[BLEManager] Wet calibration triggered: ");
+            Serial.println(currentRaw);
+        } else {
+            Serial.print("[BLEManager] Unknown calibration command: ");
+            Serial.println(cmd);
+        }
+    }
+private:
+    BLEManager* manager;
+};
+
+class CommandCallbacks : public BLECharacteristicCallbacks {
+public:
+    CommandCallbacks(BLEManager* mgr) : manager(mgr) {}
+
+    void onWrite(BLECharacteristic* pChar) override {
+        String cmd = pChar->getValue();
+        cmd.trim();
+
+        Serial.print("[BLEManager] Executing Command: ");
+        Serial.println(cmd);
+
+        if (cmd == "PUMP_ON") {
+            manager->pumpCtrl->turnOn(true); 
+        } else if (cmd == "PUMP_OFF") {
+            manager->pumpCtrl->turnOff();
+        } else if (cmd == "TRAIN") {
+            manager->edgeAI->train();
+        } else if (cmd == "AUTO_ON") {
+            manager->edgeAI->setAutoMode(true);
+        } else if (cmd == "AUTO_OFF") {
+            manager->edgeAI->setAutoMode(false);
+        } else if (cmd == "RESET") {
+            manager->edgeAI->resetModel();
+        } else if (cmd == "SIM_BANGALORE") {
+            manager->edgeAI->injectBangaloreData();
+            manager->edgeAI->train(1000, 0.15f); // 1000 epochs of training on the new data
+        } else {
+            Serial.print("[BLEManager] Command ignored: ");
+            Serial.println(cmd);
+        }
+    }
+private:
+    BLEManager* manager;
+};
+
+BLEManager::BLEManager() 
+    : sensorMgr(nullptr),
+      pumpCtrl(nullptr),
+      edgeAI(nullptr),
+      pServer(nullptr),
+      pTelemetryChar(nullptr),
+      pConfigChar(nullptr),
+      pCalibChar(nullptr),
+      pCommandChar(nullptr),
+      clientConnected(false),
+      reloadCredentialsFlag(false),
+      lastNotifyTime(0) {}
+
+void BLEManager::begin(SensorManager* sm, PumpController* pc, EdgeAI* ai) {
+    sensorMgr = sm;
+    pumpCtrl = pc;
+    edgeAI = ai;
+
+    BLEDevice::init(BLE_DEVICE_NAME);
+    pServer = BLEDevice::createServer();
+    pServer->setCallbacks(new ServerCallbacks(this));
+
+    BLEService* pService = pServer->createService(SERVICE_UUID);
+
+    pTelemetryChar = pService->createCharacteristic(
+        TELEMETRY_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+    );
+    pTelemetryChar->addDescriptor(new BLE2902());
+
+    pConfigChar = pService->createCharacteristic(
+        CONFIG_CHAR_UUID,
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    pConfigChar->setCallbacks(new ConfigCallbacks(this));
+
+    pCalibChar = pService->createCharacteristic(
+        CALIBRATION_CHAR_UUID,
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    pCalibChar->setCallbacks(new CalibrationCallbacks(this));
+
+    pCommandChar = pService->createCharacteristic(
+        COMMAND_CHAR_UUID,
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    pCommandChar->setCallbacks(new CommandCallbacks(this));
+
+    pService->start();
+
+    BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
+    pAdvertising->addServiceUUID(SERVICE_UUID);
+    pAdvertising->setScanResponse(true);
+    pAdvertising->setMinPreferred(0x06);  
+    pAdvertising->setMinPreferred(0x12);
+    BLEDevice::startAdvertising();
+
+    Serial.println("[BLEManager] Initialized. Advertising active.");
+}
+
+void BLEManager::update() {
+    if (clientConnected) {
+        unsigned long now = millis();
+        if (now - lastNotifyTime >= 2000) {
+            lastNotifyTime = now;
+
+            String json = "{";
+            json += "\"temp\":" + String(sensorMgr->getTemperature(), 1) + ",";
+            json += "\"humid\":" + String(sensorMgr->getHumidity(), 1) + ",";
+            json += "\"moist\":" + String(sensorMgr->getMoisturePercent(), 1) + ",";
+            json += "\"raw\":" + String(sensorMgr->getRawMoisture()) + ",";
+            json += "\"pump\":" + String(pumpCtrl->isRunning() ? "1" : "0") + ",";
+            json += "\"auto\":" + String(edgeAI->isAutoMode() ? "1" : "0") + ",";
+            json += "\"loss\":" + String(edgeAI->getLastTrainingLoss(), 4) + ",";
+            json += "\"samples\":" + String(edgeAI->getDatasetSize()) + ",";
+            json += "\"safety\":" + String(pumpCtrl->wasSafetyCutoffTriggered() ? "1" : "0") + ",";
+            json += "\"dry_cal\":" + String(sensorMgr->getDryCalibrationValue()) + ",";
+            json += "\"wet_cal\":" + String(sensorMgr->getWetCalibrationValue()) + ",";
+            json += "\"weights\":\"" + edgeAI->getWeightsString() + "\"";
+            json += "}";
+
+            pTelemetryChar->setValue(json.c_str());
+            pTelemetryChar->notify();
+        }
+    }
+}

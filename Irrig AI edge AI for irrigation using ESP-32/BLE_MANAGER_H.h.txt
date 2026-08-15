@@ -1,0 +1,58 @@
+#ifndef BLE_MANAGER_H
+#define BLE_MANAGER_H
+
+#include <Arduino.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+#include <Preferences.h>
+#include "config.h"
+#include "sensr_manager.h"
+#include "pumpcontroller.h"
+#include "edgeai.h"
+
+class ServerCallbacks;
+class ConfigCallbacks;
+class CalibrationCallbacks;
+class CommandCallbacks;
+
+class BLEManager {
+public:
+    BLEManager();
+
+    // Start BLE services
+    void begin(SensorManager* sm, PumpController* pc, EdgeAI* ai);
+
+    // Update routine to send periodic notifications of sensor data
+    void update();
+
+    // Connection state checks
+    bool isConnected() const { return clientConnected; }
+
+    // Flags to communicate with main loop / other managers
+    bool shouldReloadCredentials() const { return reloadCredentialsFlag; }
+    void clearReloadCredentialsFlag() { reloadCredentialsFlag = false; }
+
+private:
+    SensorManager* sensorMgr;
+    PumpController* pumpCtrl;
+    EdgeAI* edgeAI;
+
+    BLEServer* pServer;
+    BLECharacteristic* pTelemetryChar;
+    BLECharacteristic* pConfigChar;
+    BLECharacteristic* pCalibChar;
+    BLECharacteristic* pCommandChar;
+
+    bool clientConnected;
+    bool reloadCredentialsFlag;
+    unsigned long lastNotifyTime;
+
+    friend class ServerCallbacks;
+    friend class ConfigCallbacks;
+    friend class CalibrationCallbacks;
+    friend class CommandCallbacks;
+};
+
+#endif // BLE_MANAGER_H

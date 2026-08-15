@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<!-- saved from url=(0079)file:///C:/Users/papai/OneDrive/Documents/Arduino/firmware/dashboard/index.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IrrigAI - Edge AI Irrigation Dashboard</title>
+    <!-- Google Fonts -->
+    <link href="./IrrigAI - Edge AI Irrigation Dashboard_files/css2" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="./IrrigAI - Edge AI Irrigation Dashboard_files/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="./IrrigAI - Edge AI Irrigation Dashboard_files/chart.js.download"></script>
+    <link rel="stylesheet" href="./IrrigAI - Edge AI Irrigation Dashboard_files/style.css">
+</head>
+<body>
+    <div class="background-decor">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="droplet" aria-hidden="true" class="lucide lucide-droplet logo-icon"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"></path></svg>
+                <h1>Irrig<span>AI</span></h1>
+            </div>
+            <p class="tagline">Edge AI Smart Irrigation Management</p>
+            
+            <div class="tab-navigation">
+                <button class="tab-btn" onclick="switchTab(&#39;cloud&#39;)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="cloud" aria-hidden="true" class="lucide lucide-cloud"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path></svg> Cloud View (ThingSpeak)
+                </button>
+                <button class="tab-btn active" onclick="switchTab(&#39;local&#39;)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="bluetooth" aria-hidden="true" class="lucide lucide-bluetooth"><path d="m7 7 10 10-5 5V2l5 5L7 17"></path></svg> Offline BLE Control
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Body -->
+        <main>
+            <!-- 1. CLOUD DASHBOARD SECTION -->
+            <section id="cloud-section" class="tab-content">
+                <div class="config-panel glass-card">
+                    <h2><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="settings" aria-hidden="true" class="lucide lucide-settings"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg> ThingSpeak Connection Settings</h2>
+                    <div class="input-grid">
+                        <div class="input-group">
+                            <label for="ts-channel-id">Channel ID</label>
+                            <input type="text" id="ts-channel-id" placeholder="e.g. 1729344">
+                        </div>
+                        <div class="input-group">
+                            <label for="ts-read-key">Read API Key</label>
+                            <input type="password" id="ts-read-key" placeholder="Enter Read Key">
+                        </div>
+                        <button class="action-btn primary" onclick="loadThingSpeakData()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="refresh-cw" aria-hidden="true" class="lucide lucide-refresh-cw"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg> Sync Cloud Data
+                        </button>
+                    </div>
+                </div>
+
+                <div class="telemetry-grid">
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon moisture"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="waves" aria-hidden="true" class="lucide lucide-waves"><path d="M2 12q2.5 2 5 0t5 0 5 0 5 0"></path><path d="M2 19q2.5 2 5 0t5 0 5 0 5 0"></path><path d="M2 5q2.5 2 5 0t5 0 5 0 5 0"></path></svg></div>
+                        <div class="stat-info">
+                            <span class="label">Soil Moisture</span>
+                            <span class="value" id="cloud-moisture">100.0%</span>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon temp"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="thermometer" aria-hidden="true" class="lucide lucide-thermometer"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"></path></svg></div>
+                        <div class="stat-info">
+                            <span class="label">Temperature</span>
+                            <span class="value" id="cloud-temp">29.6°C</span>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon humid"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="droplets" aria-hidden="true" class="lucide lucide-droplets"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"></path><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"></path></svg></div>
+                        <div class="stat-info">
+                            <span class="label">Humidity</span>
+                            <span class="value" id="cloud-humid">64.6%</span>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon state"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="activity" aria-hidden="true" class="lucide lucide-activity"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"></path></svg></div>
+                        <div class="stat-info">
+                            <span class="label">Pump State</span>
+                            <span class="value" id="cloud-pump" style="color: var(--text-primary);">OFF</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-container">
+                    <div class="chart-card glass-card">
+                        <h3>Moisture Trend</h3>
+                        <canvas id="moistureChart" style="box-sizing: border-box; display: block; height: 271.3px; width: 542.5px;" width="862" height="431"></canvas>
+                    </div>
+                    <div class="chart-card glass-card">
+                        <h3>Climate Environment</h3>
+                        <canvas id="climateChart" style="box-sizing: border-box; display: block; height: 271.3px; width: 542.5px;" width="862" height="431"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. LOCAL BLE DASHBOARD SECTION -->
+            <section id="local-section" class="tab-content active">
+                <div class="ble-bar glass-card">
+                    <div class="ble-status-info">
+                        <div class="status-indicator disconnected" id="ble-indicator"></div>
+                        <span id="ble-status-text">Disconnected from Device</span>
+                    </div>
+                    <button class="action-btn connect" id="ble-connect-btn" onclick="toggleBLEConnection()">Scan &amp; Connect</button>
+                </div>
+
+                <div class="local-dashboard-layout">
+                    <!-- Realtime Telemetry -->
+                    <div class="telemetry-panel">
+                        <div class="telemetry-grid">
+                            <div class="stat-card glass-card">
+                                <div class="stat-icon moisture"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="waves" aria-hidden="true" class="lucide lucide-waves"><path d="M2 12q2.5 2 5 0t5 0 5 0 5 0"></path><path d="M2 19q2.5 2 5 0t5 0 5 0 5 0"></path><path d="M2 5q2.5 2 5 0t5 0 5 0 5 0"></path></svg></div>
+                                <div class="stat-info">
+                                    <span class="label">Live Moisture</span>
+                                    <span class="value" id="local-moisture">--%</span>
+                                    <span class="sub-label" id="local-raw-moisture">Raw ADC: --</span>
+                                </div>
+                            </div>
+                            <div class="stat-card glass-card">
+                                <div class="stat-icon temp"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="thermometer" aria-hidden="true" class="lucide lucide-thermometer"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"></path></svg></div>
+                                <div class="stat-info">
+                                    <span class="label">Live Temp</span>
+                                    <span class="value" id="local-temp">--°C</span>
+                                </div>
+                            </div>
+                            <div class="stat-card glass-card">
+                                <div class="stat-icon humid"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="droplets" aria-hidden="true" class="lucide lucide-droplets"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"></path><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"></path></svg></div>
+                                <div class="stat-info">
+                                    <span class="label">Live Humidity</span>
+                                    <span class="value" id="local-humid">--%</span>
+                                </div>
+                            </div>
+                            <div class="stat-card glass-card" id="local-pump-card">
+                                <div class="stat-icon pump-status"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="shuffle" aria-hidden="true" class="lucide lucide-shuffle"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22"></path><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"></path><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"></path></svg></div>
+                                <div class="stat-info">
+                                    <span class="label">Pump Status</span>
+                                    <span class="value" id="local-pump-text" style="color: var(--text-primary);">OFF</span>
+                                    <span class="sub-label" id="local-safety-cutoff" style="color: rgb(255, 107, 107); display: none;">SAFETY SHUTOFF</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Calibration and Control Box -->
+                        <div class="control-box glass-card">
+                            <h2><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="sliders" aria-hidden="true" class="lucide lucide-sliders"><path d="M10 8h4"></path><path d="M12 21v-9"></path><path d="M12 8V3"></path><path d="M17 16h4"></path><path d="M19 12V3"></path><path d="M19 21v-5"></path><path d="M3 14h4"></path><path d="M5 10V3"></path><path d="M5 21v-7"></path></svg> Hardware Controls</h2>
+                            <div class="button-row">
+                                <button class="action-btn success" onclick="sendBLECommand(&#39;PUMP_ON&#39;)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="play" aria-hidden="true" class="lucide lucide-play"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"></path></svg> Start Pump
+                                </button>
+                                <button class="action-btn danger" onclick="sendBLECommand(&#39;PUMP_OFF&#39;)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="square" aria-hidden="true" class="lucide lucide-square"><rect width="18" height="18" x="3" y="3" rx="2"></rect></svg> Stop Pump
+                                </button>
+                            </div>
+                            
+                            <hr class="divider">
+
+                            <h3>Moisture Calibration</h3>
+                            <p class="section-desc">Place the sensor in appropriate soil and calibrate values dynamically to recalculate moisture ranges.</p>
+                            <div class="button-row">
+                                <button class="action-btn secondary" onclick="sendBLECalibration(&#39;CAL_DRY&#39;)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="sun" aria-hidden="true" class="lucide lucide-sun"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg> Calibrate Bone Dry
+                                </button>
+                                <button class="action-btn secondary" onclick="sendBLECalibration(&#39;CAL_WET&#39;)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="droplet" aria-hidden="true" class="lucide lucide-droplet"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"></path></svg> Calibrate Saturated Wet
+                                </button>
+                            </div>
+                            <div class="cal-status-row">
+                                <span>Current Settings -&gt; Dry Limit: <strong id="cal-dry-val">--</strong> | Wet Limit: <strong id="cal-wet-val">--</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Status & Network Config -->
+                    <div class="ai-panel">
+                        <!-- Edge AI Info -->
+                        <div class="ai-card glass-card">
+                            <div class="ai-header">
+                                <h2><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="cpu" aria-hidden="true" style="color: #a78bfa;" class="lucide lucide-cpu"><path d="M12 20v2"></path><path d="M12 2v2"></path><path d="M17 20v2"></path><path d="M17 2v2"></path><path d="M2 12h2"></path><path d="M2 17h2"></path><path d="M2 7h2"></path><path d="M20 12h2"></path><path d="M20 17h2"></path><path d="M20 7h2"></path><path d="M7 20v2"></path><path d="M7 2v2"></path><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="8" y="8" width="8" height="8" rx="1"></rect></svg> Edge AI Engine</h2>
+                                <div class="switch-container">
+                                    <span>Auto Mode</span>
+                                    <label class="switch">
+                                        <input type="checkbox" id="auto-mode-checkbox" onchange="toggleAutoMode(this)">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="ai-stats">
+                                <div class="ai-stat-row">
+                                    <span>Dataset Sample Size:</span>
+                                    <span class="highlight" id="ai-samples-count">-- / 50</span>
+                                </div>
+                                <div class="ai-stat-row">
+                                    <span>Model Loss (MSE):</span>
+                                    <span class="highlight" id="ai-loss-val">--</span>
+                                </div>
+                            </div>
+
+                            <div class="button-row-stacked">
+                                <button class="action-btn ai-btn" onclick="sendBLECommand(&#39;TRAIN&#39;)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="zap" aria-hidden="true" class="lucide lucide-zap"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"></path></svg> Trigger On-Device Retraining
+                                </button>
+                                <button class="action-btn simulate-btn" onclick="sendBLECommand(&#39;SIM_BANGALORE&#39;)" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; margin-top: 8px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="cloud-lightning" aria-hidden="true" class="lucide lucide-cloud-lightning"><path d="M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973"></path><path d="m13 12-3 5h4l-3 5"></path></svg> Simulate Bangalore Summer Data
+                                </button>
+                                <button class="action-btn outline-btn" onclick="sendBLECommand(&#39;RESET&#39;)" style="margin-top: 8px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="rotate-ccw" aria-hidden="true" class="lucide lucide-rotate-ccw"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg> Reset Neural Net weights
+                                </button>
+                            </div>
+
+                            <div class="weights-display">
+                                <h4>Model Synapses (IH &amp; HO Weights)</h4>
+                                <div id="weights-grid" class="weights-grid-container">Connecting to BLE to fetch weights...</div>
+                            </div>
+                        </div>
+
+                        <!-- Secure Wifi Provisioning -->
+                        <div class="wifi-provision glass-card">
+                            <h2><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="wifi" aria-hidden="true" style="color: #60a5fa;" class="lucide lucide-wifi"><path d="M12 20h.01"></path><path d="M2 8.82a15 15 0 0 1 20 0"></path><path d="M5 12.859a10 10 0 0 1 14 0"></path><path d="M8.5 16.429a5 5 0 0 1 7 0"></path></svg> Secure WiFi Setup</h2>
+                            <p class="section-desc">Provision Wi-Fi credentials and your ThingSpeak write key securely over Bluetooth without hardcoding them.</p>
+                            <div class="form-group">
+                                <label for="wifi-ssid">WiFi SSID (Name)</label>
+                                <input type="text" id="wifi-ssid" placeholder="Home Network SSID">
+                            </div>
+                            <div class="form-group">
+                                <label for="wifi-pass">WiFi Password</label>
+                                <input type="password" id="wifi-pass" placeholder="Network Password">
+                            </div>
+                            <div class="form-group">
+                                <label for="wifi-ts-key">ThingSpeak Write API Key</label>
+                                <input type="password" id="wifi-ts-key" placeholder="ThingSpeak Channel Write Key">
+                            </div>
+                            <button class="action-btn primary full-width" onclick="uploadWiFiConfig()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="shield-check" aria-hidden="true" class="lucide lucide-shield-check"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg> Write Config to ESP32 NVS
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Script Entry -->
+    <script src="./IrrigAI - Edge AI Irrigation Dashboard_files/app.js"></script>
+    <script>
+        // Init Lucide Icons
+        lucide.createIcons();
+    </script>
+
+
+</body></html>

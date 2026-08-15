@@ -1,0 +1,120 @@
+#include "sensr_manager.h"
+
+SensorManager::SensorManager() 
+    : dht(DHTPIN, DHTTYPE),
+      temperature(25.0f),
+      humidity(50.0f),
+      rawMoisture(DEFAULT_DRY_VALUE),
+      moisturePercent(0.0f),
+      dryValue(DEFAULT_DRY_VALUE),
+      wetValue(DEFAULT_WET_VALUE) {}
+
+void SensorManager::begin() {
+    // Start DHT22
+    dht.begin();
+    
+    // Configure ADC resolution (12-bit is standard for ESP32, 0 - 4095)
+    analogReadResolution(12);
+    
+    // Load calibration values from NVS
+    preferences.begin(NVS_NAMESPACE, true); // Open in read-only mode
+    dryValue = preferences.getInt(KEY_MOIST_DRY, DEFAULT_DRY_VALUE);
+    wetValue = preferences.getInt(KEY_MOIST_WET, DEFAULT_WET_VALUE);
+    preferences.end();
+    
+    Serial.println("[SensorManager] Initialized.");
+    Serial.print("[SensorManager] Calibration - Dry threshold: ");
+    Serial.print(dryValue);
+    Serial.print(", Wet threshold: ");
+    Serial.println(wetValue);
+    
+    // Perform initial read to populate values
+    update();
+}
+
+void SensorManager::update() {
+    // Read temperature and humidity (try up to 3 times to bypass BLE interrupt conflicts)
+    float t = NAN;
+    float h = NAN;
+    for (int i = 0; i < 3; i++) {
+        t = dht.readTemperature();
+        h = dht.readHumidity();
+        if (!isnan(t) && !isnan(h)) {
+            break;
+        }
+        delay(50); // Short delay before retry
+    }
+
+    if (!isnan(t)) {
+        temperature = t;
+    } else {
+        Serial.println("[SensorManager] Warning: Failed to read temperature from DHT22!");
+    }
+
+    if (!isnan(h)) {
+        humidity = h;
+    } else {
+        Serial.println("[SensorManager] Warning: Failed to read humidity from DHT22!");
+    }
+
+    // Read analog soil moisture (oversampling to reduce noise)
+    long sum = 0;
+    const int samples = 16;
+    for (int i = 0; i < samples; i++) {
+        sum += analogRead(MOISTURE_PIN);
+        delay(5); // Small delay between analog conversions
+    }
+    rawMoisture = sum / samples;
+    
+    // Calculate moisture percentage
+    moisturePercent = calculateMoisturePercent(rawMoisture);
+}
+
+float SensorManager::calculateMoisturePercent(int raw) const {
+    // Capacitive sensor value is higher in dry soil and lower in wet soil
+    // dryValue > wetValue
+    if (dryValue <= wetValue) {
+        return 0.0f; // Invalid calibration
+    }
+    
+    float percent = (float)(dryValue - raw) / (dryValue - wetValue) * 100.0f;
+    return constrain(percent, 0.0f, 100.0f);
+}
+
+void SensorManager::calibrateDry(int rawVal) {
+    if (rawVal <= wetValue) {
+        Serial.println("[SensorManager] Calibration Error: Dry value must be greater than Wet value!");
+        return;
+    }
+    dryValue = rawVal;
+    
+    // Save to NVS
+    preferences.begin(NVS_NAMESPACE, false); // Open in read-write mode
+    preferences.putInt(KEY_MOIST_DRY, dryValue);
+    preferences.end();
+    
+    // Recalculate percent based on updated calibration
+    moisturePercent = calculateMoisturePercent(rawMoisture);
+    
+    Serial.print("[SensorManager] Calibrated Dry to raw ADC: ");
+    Serial.println(dryValue);
+}
+
+void SensorManager::calibrateWet(int rawVal) {
+    if (rawVal >= dryValue) {
+        Serial.println("[SensorManager] Calibration Error: Wet value must be less than Dry value!");
+        return;
+    }
+    wetValue = rawVal;
+    
+    // Save to NVS
+    preferences.begin(NVS_NAMESPACE, false); // Open in read-write mode
+    preferences.putInt(KEY_MOIST_WET, wetValue);
+    preferences.end();
+    
+    // Recalculate percent based on updated calibration
+    moisturePercent = calculateMoisturePercent(rawMoisture);
+    
+    Serial.print("[SensorManager] Calibrated Wet to raw ADC: ");
+    Serial.println(wetValue);
+}
