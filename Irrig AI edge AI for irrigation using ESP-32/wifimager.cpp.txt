@@ -1,0 +1,113 @@
+#include "wifimager.h"
+
+WiFiManager::WiFiManager()
+    : connected(false),
+      lastReconnectAttempt(0),
+      reconnectInterval(15000) {} 
+
+void WiFiManager::begin() {
+    loadCredentials();
+    WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true); // Let ESP32 background stack handle auto-reconnects safely
+    
+    if (ssid.length() > 0) {
+        startConnection();
+    } else {
+        Serial.println("[WiFiManager] No WiFi credentials configured in NVS. Waiting for BLE configuration...");
+    }
+}
+
+void WiFiManager::loadCredentials() {
+    preferences.begin(NVS_NAMESPACE, true); 
+    ssid = preferences.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID);
+    password = preferences.getString(KEY_WIFI_PASS, DEFAULT_WIFI_PASS);
+    thingspeakWriteKey = preferences.getString(KEY_TS_WRITE_KEY, DEFAULT_TS_WRITE_KEY);
+    preferences.end();
+
+    if (ssid.length() > 0) {
+        Serial.println("[WiFiManager] Credentials loaded from NVS:");
+        Serial.print("  SSID: "); Serial.println(ssid);
+        Serial.print("  ThingSpeak Key: ");
+        if (thingspeakWriteKey.length() > 0) {
+            Serial.println("[LOADED]");
+        } else {
+            Serial.println("[NOT SET]");
+        }
+    }
+}
+
+void WiFiManager::startConnection() {
+    if (ssid.length() == 0) {
+        return;
+    }
+
+    Serial.print("[WiFiManager] Attempting connection to SSID: ");
+    Serial.println(ssid);
+    
+    WiFi.begin(ssid.c_str(), password.c_str());
+    lastReconnectAttempt = millis();
+}
+
+void WiFiManager::update(bool bleConnected) {
+    bool currentStatus = (WiFi.status() == WL_CONNECTED);
+
+    if (currentStatus) {
+        if (!connected) {
+            connected = true;
+            Serial.print("[WiFiManager] Connected! IP Address: ");
+            Serial.println(WiFi.localIP());
+        }
+    } else {
+        if (connected) {
+            connected = false;
+            Serial.println("[WiFiManager] WiFi Connection lost.");
+        }
+        // Background auto-reconnect is active, so we don't call WiFi.begin() in a loop anymore.
+        // This keeps the radio clear for Bluetooth handshakes.
+    }
+}
+
+bool WiFiManager::uploadData(float temp, float humid, float moisturePct, bool pumpRunning, float aiLoss, int sampleCount) {
+    if (!connected) {
+        Serial.println("[WiFiManager] Upload failed: WiFi not connected.");
+        return false;
+    }
+
+    if (thingspeakWriteKey.length() == 0) {
+        Serial.println("[WiFiManager] Upload failed: ThingSpeak API Key not configured.");
+        return false;
+    }
+
+    HTTPClient http;
+    
+    String url = "http://api.thingspeak.com/update?api_key=" + thingspeakWriteKey;
+    url += "&field1=" + String(temp, 1);
+    url += "&field2=" + String(humid, 1);
+    url += "&field3=" + String(moisturePct, 1);
+    url += "&field4=" + String(pumpRunning ? "1" : "0");
+    url += "&field5=" + String(aiLoss, 4);
+    url += "&field6=" + String(sampleCount);
+
+    Serial.print("[WiFiManager] Sending upload request to ThingSpeak... ");
+    
+    http.begin(url);
+    int httpResponseCode = http.GET();
+    
+    bool success = false;
+    if (httpResponseCode > 0) {
+        String response = http.getString();
+        if (response != "0") { 
+            Serial.print("Success! Entry ID: ");
+            Serial.println(response);
+            success = true;
+        } else {
+            Serial.println("Failed! ThingSpeak rate limited.");
+        }
+    } else {
+        Serial.print("Error code: ");
+        Serial.println(httpResponseCode);
+    }
+    
+    http.end();
+    return success;
+}

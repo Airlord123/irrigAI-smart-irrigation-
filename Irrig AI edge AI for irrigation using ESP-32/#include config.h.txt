@@ -1,0 +1,138 @@
+#include "config.h"
+#include "sensr_manager.h"
+#include "pumpcontroller.h"
+#include "edgeai.h"
+#include "blemanger.h"
+#include "wifimager.h"
+
+SensorManager sensorMgr;
+PumpController pumpCtrl;
+EdgeAI edgeAI;
+BLEManager bleMgr;
+WiFiManager wifiMgr;
+
+unsigned long lastSensorReadTime = 0;
+unsigned long lastThingSpeakUploadTime = 0;
+unsigned long lastNegativeSampleTime = 0;
+
+const unsigned long AUTO_TRAIN_INTERVAL = 30000;
+unsigned long lastTrainTime = 0;
+
+const unsigned long NEGATIVE_SAMPLE_INTERVAL = 600000; 
+bool prevPumpState = false;
+
+void setup() {
+    Serial.begin(115200);
+    delay(1000); 
+    
+    Serial.println("\n=============================================");
+    Serial.println("  ESP32-S3 Edge AI Smart Irrigation System  ");
+    Serial.println("=============================================\n");
+
+    sensorMgr.begin();
+    pumpCtrl.begin();
+    edgeAI.begin();
+    bleMgr.begin(&sensorMgr, &pumpCtrl, &edgeAI);
+    wifiMgr.begin();
+
+    unsigned long bootTime = millis();
+    lastSensorReadTime = bootTime;
+    lastThingSpeakUploadTime = bootTime;
+    lastNegativeSampleTime = bootTime;
+    lastTrainTime = bootTime;
+}
+
+void loop() {
+    pumpCtrl.update();
+    bleMgr.update();
+    wifiMgr.update(bleMgr.isConnected());
+
+    if (bleMgr.shouldReloadCredentials()) {
+        Serial.println("[System] Reloading Wi-Fi config and restarting connection...");
+        wifiMgr.loadCredentials();
+        wifiMgr.begin();
+        bleMgr.clearReloadCredentialsFlag();
+    }
+
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - lastSensorReadTime >= SENSOR_READ_INTERVAL) {
+        lastSensorReadTime = currentMillis;
+        sensorMgr.update();
+
+        Serial.print("[System] Temp: "); Serial.print(sensorMgr.getTemperature(), 1); Serial.print("°C | ");
+        Serial.print("Humid: "); Serial.print(sensorMgr.getHumidity(), 1); Serial.print("% | ");
+        Serial.print("Soil Moisture: "); Serial.print(sensorMgr.getMoisturePercent(), 1); 
+        Serial.print("% (Raw: "); Serial.print(sensorMgr.getRawMoisture()); Serial.println(")");
+
+        if (edgeAI.isAutoMode()) {
+            float prediction = edgeAI.predict(
+                sensorMgr.getMoisturePercent(),
+                sensorMgr.getTemperature(),
+                sensorMgr.getHumidity()
+            );
+
+            Serial.print("[System] Edge AI Irrigation Need Probability: ");
+            Serial.println(prediction, 4);
+
+            if (prediction >= 0.60f) {
+                if (pumpCtrl.canRunAuto()) {
+                    Serial.println("[System] Edge AI triggered automated watering cycle.");
+                    pumpCtrl.turnOn(false); 
+                }
+            }
+        }
+    }
+
+    bool currentPumpState = pumpCtrl.isRunning();
+    if (currentPumpState && !prevPumpState) {
+        if (currentMillis - lastSensorReadTime < 10000) { 
+            edgeAI.addSample(
+                sensorMgr.getMoisturePercent(),
+                sensorMgr.getTemperature(),
+                sensorMgr.getHumidity(),
+                1.0f
+            );
+        }
+    }
+    prevPumpState = currentPumpState;
+
+    if (currentMillis - lastNegativeSampleTime >= NEGATIVE_SAMPLE_INTERVAL) {
+        lastNegativeSampleTime = currentMillis;
+        
+        if (sensorMgr.getMoisturePercent() >= 55.0f && !pumpCtrl.isRunning()) {
+            Serial.println("[System] Collecting baseline negative sample (soil is wet).");
+            edgeAI.addSample(
+                sensorMgr.getMoisturePercent(),
+                sensorMgr.getTemperature(),
+                sensorMgr.getHumidity(),
+                0.0f
+            );
+        }
+    }
+
+    if (currentMillis - lastTrainTime >= AUTO_TRAIN_INTERVAL) {
+        lastTrainTime = currentMillis;
+        if (edgeAI.getDatasetSize() >= 5) { 
+            Serial.println("[System] Triggering scheduled offline automated learning cycle...");
+            edgeAI.train(1000, 0.15f);
+        } else {
+            Serial.println("[System] Scheduled training deferred: Insufficient samples.");
+        }
+    }
+
+    if (currentMillis - lastThingSpeakUploadTime >= THINGSPEAK_SEND_INTERVAL) {
+        lastThingSpeakUploadTime = currentMillis;
+
+        if (wifiMgr.isConnected()) {
+            wifiMgr.uploadData(
+                sensorMgr.getTemperature(),
+                sensorMgr.getHumidity(),
+                sensorMgr.getMoisturePercent(),
+                pumpCtrl.isRunning(),
+                edgeAI.getLastTrainingLoss(),
+                edgeAI.getDatasetSize()
+            );
+        }
+    }
+}
